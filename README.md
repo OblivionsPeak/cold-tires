@@ -4,6 +4,23 @@ A tiny iRacing overlay that flashes **❄ COLD TIRES** on your out lap, then
 shows a green **✔ TIRES READY** the moment the coldest tire reaches
 temperature. Nothing else. No dashboard, no setup screens — one EXE.
 
+## Quick start
+
+1. Double-click `cold-tires.exe` — a snowflake appears in the system tray
+2. Right-click the snowflake → **Reposition banner**, drag the banner where
+   you want it, double-click the banner to save
+3. Right-click → **Preview flash (8s)** to see exactly what race day looks like
+4. Drive. It arms when you leave pit road and disappears once you're up to temp
+
+Everything lives in the tray menu:
+
+| menu item | what it does |
+|---|---|
+| **Reposition banner** | banner becomes draggable; double-click it (or untick the menu) to save |
+| **Preview flash (8s)** | fake warning so you can judge position/visibility |
+| **Units** | Celsius or Fahrenheit for the temp readout |
+| **Exit** | cleanly closes the overlay |
+
 ## How it works
 
 - **Arms** when you leave pit road (`OnPitRoad` true → false while on track)
@@ -14,47 +31,42 @@ temperature. Nothing else. No dashboard, no setup screens — one EXE.
 - Overlay is transparent, always-on-top, click-through, and hidden from
   Alt-Tab. iRacing must run **windowed / borderless** for it to show.
 
-## Usage
+## CLI (optional)
 
 ```
 cold-tires.exe            # run the overlay
-cold-tires.exe --setup    # draggable banner; drag into place, close to save
+cold-tires.exe --setup    # start directly in reposition mode
 cold-tires.exe --demo     # scripted fake session to preview the flash
 ```
 
-**Quitting:** the overlay is click-through and hidden from Alt-Tab, so it has
-no close button. Stop it from PowerShell:
-
-```
-Stop-Process -Name cold-tires -Force
-```
-
-or end **cold-tires.exe** in Task Manager (the onefile EXE shows as two
-processes — killing by name gets both).
-
 ## Config
 
-`cold-tires.json` appears next to the EXE on first run:
+`cold-tires.json` appears next to the EXE on first run. Position and units
+are managed from the tray; the rest is for tuning:
 
 | key | default | meaning |
 |---|---|---|
-| `x`, `y` | 200, 120 | overlay position (or use `--setup`) |
-| `threshold_c` | 60 | coldest tire must reach this (°C) to count as warm |
+| `x`, `y` | 200, 120 | overlay position (tray → Reposition banner) |
+| `threshold_c` | 60 | coldest tire must reach this (°C) to count as warm — always Celsius, regardless of display units |
 | `disarm_laps` | 1 | stop warning after this many completed laps |
 | `poll_hz` | 4 | telemetry polling rate |
 | `flash_hz` | 2 | banner flash rate |
 | `show_temps` | true | append the coldest temp to the banner |
+| `units` | `c` | `c` or `f` — display only (tray → Units) |
 
-Threshold guidance: ~60°C suits most slicks coming off cold; wets and road
-tires run lower. If the live carcass temps ever read stale for a car, the
-lap-based disarm still ends the warning after the out lap.
+Threshold guidance: ~60°C (140°F) suits most slicks coming off cold; wets and
+road tires run lower. If the live carcass temps ever read stale for a car,
+the lap-based disarm still ends the warning after the out lap.
 
 ## Build from source
 
 ```
-pip install pyirsdk pyinstaller
+pip install pyirsdk pystray pillow pyinstaller
 pyinstaller --onefile --noconsole --name cold-tires app.py
 ```
+
+(`pystray`/`pillow` are optional at runtime — without them the overlay still
+works, minus the tray icon.)
 
 ## Dev
 
