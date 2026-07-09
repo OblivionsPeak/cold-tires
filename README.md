@@ -22,6 +22,16 @@ cold-tires.exe --setup    # draggable banner; drag into place, close to save
 cold-tires.exe --demo     # scripted fake session to preview the flash
 ```
 
+**Quitting:** the overlay is click-through and hidden from Alt-Tab, so it has
+no close button. Stop it from PowerShell:
+
+```
+Stop-Process -Name cold-tires -Force
+```
+
+or end **cold-tires.exe** in Task Manager (the onefile EXE shows as two
+processes — killing by name gets both).
+
 ## Config
 
 `cold-tires.json` appears next to the EXE on first run:
