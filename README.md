@@ -25,9 +25,15 @@ Everything lives in the tray menu:
 
 - **Arms** when you leave pit road (`OnPitRoad` true → false while on track)
 - **Disarms** on the first of:
-  - the coldest tire carcass temp (`xxTempCM`) reaching the threshold → brief green confirmation
-  - completing the out lap (`disarm_laps`, default 1)
+  - driving `warmup_pct` of a lap since pit exit (default 0.75) → green **✔ TIRES READY**
+  - the coldest tire carcass temp reaching the threshold → green confirmation
+    (only used if the temps are actually updating — see below)
+  - completing the out lap (`disarm_laps`, default 1) — quiet hard stop
   - returning to pit road
+- **Tire temps:** iRacing only refreshes tire temps in the pit box for most
+  cars, so the overlay watches whether they move after pit exit. If they do,
+  they drive the disarm and show on the banner; if frozen, the banner shows
+  no number and the distance heuristic handles the disarm.
 - Overlay is transparent, always-on-top, click-through, and hidden from
   Alt-Tab. iRacing must run **windowed / borderless** for it to show.
 
@@ -47,8 +53,9 @@ are managed from the tray; the rest is for tuning:
 | key | default | meaning |
 |---|---|---|
 | `x`, `y` | 200, 120 | overlay position (tray → Reposition banner) |
-| `threshold_c` | 60 | coldest tire must reach this (°C) to count as warm — always Celsius, regardless of display units |
-| `disarm_laps` | 1 | stop warning after this many completed laps |
+| `threshold_c` | 60 | coldest tire must reach this (°C) to count as warm — always Celsius, regardless of display units; only applies when temps stream live |
+| `warmup_pct` | 0.75 | fraction of a lap after pit exit until tires count as in |
+| `disarm_laps` | 1 | hard stop: give up warning after this many completed laps |
 | `poll_hz` | 4 | telemetry polling rate |
 | `flash_hz` | 2 | banner flash rate |
 | `show_temps` | true | append the coldest temp to the banner |

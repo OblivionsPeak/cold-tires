@@ -33,7 +33,8 @@ DEFAULTS = {
     'x': 200,               # overlay top-left, screen px
     'y': 120,
     'threshold_c': 60,      # coldest tire must reach this (deg C) to count as warm
-    'disarm_laps': 1,       # give up warning after this many completed laps
+    'warmup_pct': 0.75,     # fraction of a lap after pit exit until tires count as in
+    'disarm_laps': 1,       # hard stop: give up after this many completed laps
     'poll_hz': 4,
     'flash_hz': 2,
     'show_temps': True,     # append the coldest tire temp to the banner
@@ -86,23 +87,25 @@ class Telemetry:
             'on_pit': bool(self.ir['OnPitRoad']),
             'on_track': bool(self.ir['IsOnTrack']),
             'lap': self.ir['Lap'] or 0,
+            'pct': self.ir['LapDistPct'] or 0.0,
             'coldest': min(temps) if len(temps) == 4 else None,
         }
 
 class DemoTelemetry:
-    """Scripted session: 4s in pits -> exit -> tires warm 30->75C over 20s."""
+    """Scripted session: 4s in pits -> exit -> a lap driven over 24s with
+    STATIC temps, exercising the distance-based disarm path (like the sim)."""
     def __init__(self):
         self.t0 = time.time()
 
     def poll(self):
         t = (time.time() - self.t0) % 32
         on_pit = t < 4
-        warm = min(75.0, 30.0 + max(0.0, t - 4) * 2.25)
         return {
             'on_pit': on_pit,
             'on_track': True,
             'lap': 1,
-            'coldest': warm,
+            'pct': 0.0 if on_pit else min(0.999, (t - 4) / 24),
+            'coldest': 34.0,   # frozen, as live telemetry turned out to be
         }
 
 # ---------------------------------------------------------------- overlay
@@ -174,9 +177,12 @@ class Overlay:
         self.actions.put(fn)
 
     def set_repositioning(self, on):
+        was = self.repositioning
         self.repositioning = on
         self._set_click_through(not on)
-        if not on:
+        # save only when leaving reposition mode — saving on the startup
+        # set_repositioning(False) would capture 0,0 before the WM places us
+        if was and not on:
             self.cfg['x'] = self.root.winfo_x()
             self.cfg['y'] = self.root.winfo_y()
             save_config(self.cfg)
@@ -214,17 +220,33 @@ class Overlay:
         if prev is True and not s['on_pit']:      # pit exit — arm
             self.armed = True
             self.arm_lap = s['lap']
+            self.arm_progress = s['lap'] + s['pct']
+            self.arm_temp = s['coldest']
+            self.temps_live = False                # proven live only if they move
             self.ready_until = 0
 
         if not self.armed:
             return
+
+        # iRacing only refreshes tire temps in the pit box for most cars —
+        # trust them for disarm/display only once they visibly change
+        if (not self.temps_live and s['coldest'] is not None
+                and self.arm_temp is not None
+                and abs(s['coldest'] - self.arm_temp) > 0.5):
+            self.temps_live = True
+
+        progress = (s['lap'] + s['pct']) - (self.arm_progress or 0)
         if s['on_pit']:                            # back in — cancel quietly
             self.armed = False
-        elif s['coldest'] is not None and s['coldest'] >= self.cfg['threshold_c']:
-            self.armed = False                     # up to temp — confirm
+        elif (self.temps_live and s['coldest'] is not None
+                and s['coldest'] >= self.cfg['threshold_c']):
+            self.armed = False                     # measured up to temp — confirm
+            self.ready_until = now + 2.5
+        elif progress >= self.cfg['warmup_pct']:
+            self.armed = False                     # enough distance driven — confirm
             self.ready_until = now + 2.5
         elif s['lap'] >= (self.arm_lap or 0) + self.cfg['disarm_laps']:
-            self.armed = False                     # out lap done — stop nagging
+            self.armed = False                     # hard stop — quiet
 
     # -- drawing ---------------------------------------------------------
 
@@ -253,9 +275,13 @@ class Overlay:
         if flashing:
             phase = int(now * self.cfg['flash_hz'] * 2) % 2
             label = '❄ COLD TIRES'
-            coldest = s['coldest'] if (s and self.armed) else 34.0  # preview shows a sample temp
-            if self.cfg['show_temps'] and coldest is not None:
-                label += f'  ·  {self._fmt_temp(coldest)}'
+            if self.armed:
+                # only show a temp that's actually updating (most cars don't
+                # stream tire temps — a frozen number would be misleading)
+                if self.cfg['show_temps'] and self.temps_live and s and s['coldest'] is not None:
+                    label += f'  ·  {self._fmt_temp(s["coldest"])}'
+            elif self.cfg['show_temps']:
+                label += f'  ·  {self._fmt_temp(34.0)}'   # preview sample
             self._banner(COLD_A if phase else COLD_B, label)
         elif now < self.ready_until:
             self._banner(READY, '✔ TIRES READY')
